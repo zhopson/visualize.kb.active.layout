@@ -9,47 +9,48 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include "config.h"
+#include "kbutil.h"
 
 #define BORDER_WIDTH 5
-#define APP_PATH_SIZE 500
-// #define SIGTERM_MSG "SIGTERM received.\n"
-#define UTIL_PATH "/soft/v.color.lang/xkblayout-state print \"\%s\""
+#define DELAY_CHECK 3
 
-const char LOCKFILE[] = "/tmp/vlang.lock";
+const char LOCKFILE[] = "/tmp/vlang_test.lock";
+char C_FILENAME[] = "app.conf";
 
 // Define a signal handler function
 void sig_handler(int signum) {
-    printf("\nПолучен сигнал номер %d\n", signum);
-    printf("Завершение приложения.\n");
+    printf("\nGetting signal number %d\n", signum);
+    printf("Stopping application.\n");
     unlink(LOCKFILE); // Удаляем файл блокировки перед выходом    
     exit(signum);  // Graceful shutdown
 }
 
-void get_active_lang(char* app_path, char* out)
-{
-    FILE *fp;
-    char buffer[100];
-    char c;
-    size_t read_size;
+// void get_active_lang(char* app_path, char* out)
+// {
+//     FILE *fp;
+//     char buffer[100];
+//     char c;
+//     size_t read_size;
 
-    /* Open the command for reading. */
-    fp = popen(app_path, "r");
-    if (fp == NULL) {
-        printf("Failed to run command\n" );
-        exit(1);
-    }
+//     /* Open the command for reading. */
+//     fp = popen(app_path, "r");
+//     if (fp == NULL) {
+//         printf("Failed to run command\n" );
+//         exit(1);
+//     }
 
-    // Читаем вывод команды большими блоками
-    while((read_size = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-        //fwrite(buffer, 1, read_size, stdout); // Выводим результат на экран
-        strncat(out,buffer,read_size);
-    }
+//     // Читаем вывод команды большими блоками
+//     while((read_size = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+//         //fwrite(buffer, 1, read_size, stdout); // Выводим результат на экран
+//         strncat(out,buffer,read_size);
+//     }
 
-    /* close */
-    pclose(fp);
-}
+//     /* close */
+//     pclose(fp);
+// }
 
-void DrawLineTopBottomDesktop(Display *dpy/*, Window target_window*/, char *app_path, int px, int py, int pwidth, int pheight) {
+void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int pheight) {
     XSetWindowAttributes attr = {0};
     XGCValues gcv = {0};
     XVisualInfo vinfo;
@@ -60,15 +61,21 @@ void DrawLineTopBottomDesktop(Display *dpy/*, Window target_window*/, char *app_
     attr.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), vinfo.visual, AllocNone);
     attr.override_redirect = True; // Невмешивается в оконный менеджер
 
+    // struct xf_colors {
+    //     XColor scolor;
+    //     char   hcolor[MAX_LEN];
+    // } a_xf_colors[NUM_COLORS];
+
     XColor color_orange;
+    char hcolor[MAX_LEN];
     // char orangeDark[] = "#FF8000";
-    char orangeDark[] = "#FF0000";
-    XParseColor(dpy, attr.colormap, orangeDark, &color_orange);
+    strcpy(hcolor, c_get_kb_color(0));//"#FF0000";
+    XParseColor(dpy, attr.colormap, hcolor, &color_orange);
     XAllocColor(dpy, attr.colormap, &color_orange);
 
     XColor color_blue;
-    char blueSky[] = "#007bff";
-    XParseColor(dpy, attr.colormap, blueSky, &color_blue);
+    strcpy(hcolor, c_get_kb_color(1));//"#007bff";
+    XParseColor(dpy, attr.colormap, hcolor, &color_blue);
     XAllocColor(dpy, attr.colormap, &color_blue);
 
     wt = XCreateWindow(dpy, DefaultRootWindow(dpy), 0, 0,
@@ -86,18 +93,15 @@ void DrawLineTopBottomDesktop(Display *dpy/*, Window target_window*/, char *app_
     XMapWindow(dpy, wb);
     XSync(dpy, False);
 
-    char ppp[2000];
-    char prev_lang[3];
-
+    int c_kb_index, c_prev_kb_index=-1;
     while (1) {
 
-        sleep(3);
-        ppp[0] = '\0';
-        get_active_lang(app_path, ppp);
+        sleep(DELAY_CHECK);
+        c_kb_index = kb_get_group(dpy, NUM_COLORS);
 
-        if (strncmp(ppp, prev_lang, 3)!=0) {
-    //        printf("%s\n", ppp);
-            if (strcmp(ppp,"us")==0) {
+        if (c_kb_index != c_prev_kb_index) {
+
+            if (c_kb_index == 0) {
                 XSetForeground(dpy, gct, color_orange.pixel);
                 XSetForeground(dpy, gcb, color_orange.pixel);
             }
@@ -110,7 +114,7 @@ void DrawLineTopBottomDesktop(Display *dpy/*, Window target_window*/, char *app_
             XDrawRectangle(dpy, wb, gcb, BORDER_WIDTH, 0, pwidth, BORDER_WIDTH);
             XSync(dpy, False);
 
-            snprintf(prev_lang, 3, "%s", ppp);
+            c_prev_kb_index = c_kb_index;
             // printf("Active language changed to %s\n", ppp);
         }
         else { 
@@ -141,7 +145,7 @@ int GetWinClientArea(Display *display, int screen, int *coords) {
     Status result = XGetWindowProperty(display, RootWindow(display, screen), work_area_atom, 0, 4 /* enough for 4 integers */, False, XA_CARDINAL, &actual_type, &actual_format, &n_items, &bytes_after, &work_area_data);
 
     if (result != Success || work_area_data == NULL || n_items < 4) {
-        fprintf(stderr, "Не удалось прочитать рабочую область или она пустая.\n");
+        fprintf(stderr, "Cannot read working client area or is empty this one.\n");
         return 1;
     }
 
@@ -156,7 +160,7 @@ int GetWinClientArea(Display *display, int screen, int *coords) {
         // Освобождаем ресурс
         XFree(work_area_data);
     } else {
-        fprintf(stderr, "Не удалось прочитать рабочую область.\n");
+        fprintf(stderr, "Cannot read working client area.\n");
         return 1;
     }
 
@@ -176,32 +180,47 @@ int main(int argc, char *argv[])
     int fd = open(LOCKFILE, O_RDWR | O_CREAT | O_EXCL, 0644);
     if (fd == -1) {
         if (errno == EEXIST) {
-            fprintf(stderr, "Приложение уже запущено.\n");
+            fprintf(stderr, "Application is already running.\n");
             return 1;
         } else {
-            perror("Ошибка открытия файла блокировки");
+            perror("Error opening lockfile");
             return 1;
         }
     }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////        
-    // Регистрируем обработчики для сигналов SIGTERM and SIGINT
+    // Register handlers for signals SIGTERM and SIGINT
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
 /////////////////////////////////////////////////////////////////////////////////////////////////////////        
-    char *env_p = getenv("HOME");
-    if (env_p) {
-        printf("HOME DIR = %s\n", env_p);
-    }
-    else {
-        printf("no HOME env var set\n");
-        exit(1);
-    }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////        
-    char app_path[APP_PATH_SIZE];
-    snprintf(app_path, sizeof app_path, "%s%s", env_p, UTIL_PATH);
-    printf("Utility (get active lang) path: %s\n", app_path);
-/////////////////////////////////////////////////////////////////////////////////////////////////////////        
     Display *display = XOpenDisplay(NULL);
+/////////////////////////////////////////////////////////////////////////////////////////////////////////        
+    char layout_names[500]="\0";
+    char buf[1000]="\0";
+    char header[] = "System KB Layouts list:\n";
+
+    c_init_conf();
+
+    kb_get_layouts(display, layout_names);
+    printf("\n%s%s\n", header, layout_names);
+
+	if (!c_is_file_exists(C_FILENAME)) {
+		printf("The file not exist!\nCreating file...\n");
+        char *delim = "#########################\n";
+        char *description = "Supports only two languages keyboard layouts.\nFirst, specify index from System KB Layouts list\nSecond goes color in HEX format\n";
+        sprintf(buf, "%s%s%s%s%s%s\n", delim, header, layout_names, delim, description, delim);
+		c_write_conf(C_FILENAME, buf);
+		printf("Default config written to file\n");
+	}
+	else {
+		printf("Config file found. Reading config...\n");
+		c_read_conf(C_FILENAME);
+		printf("The config:\n");
+		c_print_conf();
+//		printf("Color 1:%s\n", c_get_kb_color(1));
+	}
+
+//   printf("Active kb index:%d\n", kb_get_group(display));
+/////////////////////////////////////////////////////////////////////////////////////////////////////////        
     // Берём номер текущего экрана
     int screen = DefaultScreen(display);
 
@@ -211,7 +230,7 @@ int main(int argc, char *argv[])
     int cx = dims[0], cy = dims[1], cwidth = dims[2], cheight = dims[3];
     printf(" > Rect of win client's work area: [%d, %d, %dX%d]\n", cx, cy, cwidth, cheight);        
 
-    DrawLineTopBottomDesktop(display, app_path, cx, cy, cwidth, cheight);
+    DrawLineTopBottomDesktop(display, cx, cy, cwidth, cheight);
 
     XCloseDisplay(display);
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
