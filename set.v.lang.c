@@ -22,7 +22,7 @@ char C_FILENAME[] = "app.conf";
 void sig_handler(int signum) {
     printf("\nGetting signal number %d\n", signum);
     printf("Stopping application.\n");
-    unlink(LOCKFILE); // Удаляем файл блокировки перед выходом    
+    unlink(LOCKFILE); // Remove filelock before shutdown  
     exit(signum);  // Graceful shutdown
 }
 
@@ -56,27 +56,22 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
     XVisualInfo vinfo;
     GC gct, gcb;
     Window wt, wb;
+    int i;
 
     XMatchVisualInfo(dpy, DefaultScreen(dpy), 32, TrueColor, &vinfo);
     attr.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), vinfo.visual, AllocNone);
-    attr.override_redirect = True; // Невмешивается в оконный менеджер
+    attr.override_redirect = True; // Window is not controlled by the window manager
+    
+    struct xf_colors {
+        XColor scolor;
+        char   hcolor[MAX_LEN];
+    } a_xf_colors[NUM_COLORS];
 
-    // struct xf_colors {
-    //     XColor scolor;
-    //     char   hcolor[MAX_LEN];
-    // } a_xf_colors[NUM_COLORS];
-
-    XColor color_orange;
-    char hcolor[MAX_LEN];
-    // char orangeDark[] = "#FF8000";
-    strcpy(hcolor, c_get_kb_color(0));//"#FF0000";
-    XParseColor(dpy, attr.colormap, hcolor, &color_orange);
-    XAllocColor(dpy, attr.colormap, &color_orange);
-
-    XColor color_blue;
-    strcpy(hcolor, c_get_kb_color(1));//"#007bff";
-    XParseColor(dpy, attr.colormap, hcolor, &color_blue);
-    XAllocColor(dpy, attr.colormap, &color_blue);
+    for (i = 0; i < NUM_COLORS; i++) {
+        strcpy(a_xf_colors[i].hcolor, c_get_kb_color(i));
+        XParseColor(dpy, attr.colormap, a_xf_colors[i].hcolor, &a_xf_colors[i].scolor);
+        XAllocColor(dpy, attr.colormap, &a_xf_colors[i].scolor);
+    }
 
     wt = XCreateWindow(dpy, DefaultRootWindow(dpy), 0, 0,
                       pwidth, BORDER_WIDTH, BORDER_WIDTH, vinfo.depth,
@@ -101,17 +96,12 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
 
         if (c_kb_index != c_prev_kb_index) {
 
-            if (c_kb_index == 0) {
-                XSetForeground(dpy, gct, color_orange.pixel);
-                XSetForeground(dpy, gcb, color_orange.pixel);
-            }
-            else {
-                XSetForeground(dpy, gct, color_blue.pixel);
-                XSetForeground(dpy, gcb, color_blue.pixel);
-            }
+            XSetForeground(dpy, gct, a_xf_colors[c_kb_index].scolor.pixel);
+            XSetForeground(dpy, gcb, a_xf_colors[c_kb_index].scolor.pixel);
 
             XDrawRectangle(dpy, wt, gct, 0, 0, pwidth, BORDER_WIDTH);
             XDrawRectangle(dpy, wb, gcb, BORDER_WIDTH, 0, pwidth, BORDER_WIDTH);
+
             XSync(dpy, False);
 
             c_prev_kb_index = c_kb_index;
@@ -123,7 +113,7 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
         }
     }
 
-    // Обновляем содержимое окна
+    // Refresh window content
     XFlush(dpy);
     XFreeGC(dpy, gct);
     XFreeGC(dpy, gcb);
@@ -133,7 +123,7 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
 
 int GetWinClientArea(Display *display, int screen, int *coords) {
 
-    // Получаем рабочую область экрана (там, где расположены окна приложений)
+    // Get working area of the screen (where the application windows are located)
     Atom work_area_atom = XInternAtom(display, "_NET_WORKAREA", False);
     Atom actual_type;
     int actual_format;
@@ -141,11 +131,11 @@ int GetWinClientArea(Display *display, int screen, int *coords) {
     unsigned char *work_area_data = NULL;
     long workarea_x, workarea_y, workarea_width, workarea_height;
 
-    // Читаем рабочее пространство
+    // Get working area
     Status result = XGetWindowProperty(display, RootWindow(display, screen), work_area_atom, 0, 4 /* enough for 4 integers */, False, XA_CARDINAL, &actual_type, &actual_format, &n_items, &bytes_after, &work_area_data);
 
     if (result != Success || work_area_data == NULL || n_items < 4) {
-        fprintf(stderr, "Cannot read working client area or is empty this one.\n");
+        fprintf(stderr, "Cannot read working client area or it`s empty.\n");
         return 1;
     }
 
@@ -157,7 +147,7 @@ int GetWinClientArea(Display *display, int screen, int *coords) {
         memcpy(&workarea_width, work_area_data + 2*sizeof(long), sizeof(long));
         memcpy(&workarea_height, work_area_data + 3*sizeof(long), sizeof(long));
 
-        // Освобождаем ресурс
+        // Releasing the resource
         XFree(work_area_data);
     } else {
         fprintf(stderr, "Cannot read working client area.\n");
@@ -169,8 +159,7 @@ int GetWinClientArea(Display *display, int screen, int *coords) {
     coords[2] = workarea_width;
     coords[3] = workarea_height;
 
-    // Выводим результат
-//    printf("Рабочая область: %dx%d (+%d+%d)\n", workarea_width, workarea_height, workarea_x, workarea_y);
+//    printf("Working area: %dx%d (+%d+%d)\n", workarea_width, workarea_height, workarea_x, workarea_y);
 
     return 0;
 }
@@ -221,7 +210,7 @@ int main(int argc, char *argv[])
 
 //   printf("Active kb index:%d\n", kb_get_group(display));
 /////////////////////////////////////////////////////////////////////////////////////////////////////////        
-    // Берём номер текущего экрана
+    // Getting current screen number
     int screen = DefaultScreen(display);
 
     int dims[3];
