@@ -26,52 +26,18 @@ void sig_handler(int signum) {
     exit(signum);  // Graceful shutdown
 }
 
-// void get_active_lang(char* app_path, char* out)
-// {
-//     FILE *fp;
-//     char buffer[100];
-//     char c;
-//     size_t read_size;
-
-//     /* Open the command for reading. */
-//     fp = popen(app_path, "r");
-//     if (fp == NULL) {
-//         printf("Failed to run command\n" );
-//         exit(1);
-//     }
-
-//     // Читаем вывод команды большими блоками
-//     while((read_size = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-//         //fwrite(buffer, 1, read_size, stdout); // Выводим результат на экран
-//         strncat(out,buffer,read_size);
-//     }
-
-//     /* close */
-//     pclose(fp);
-// }
-
 void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int pheight) {
     XSetWindowAttributes attr = {0};
     XGCValues gcv = {0};
     XVisualInfo vinfo;
     GC gct, gcb;
     Window wt, wb;
-    int i;
 
     XMatchVisualInfo(dpy, DefaultScreen(dpy), 32, TrueColor, &vinfo);
     attr.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), vinfo.visual, AllocNone);
     attr.override_redirect = True; // Window is not controlled by the window manager
-    
-    struct xf_colors {
-        XColor scolor;
-        char   hcolor[MAX_LEN];
-    } a_xf_colors[NUM_COLORS];
 
-    for (i = 0; i < NUM_COLORS; i++) {
-        strcpy(a_xf_colors[i].hcolor, c_get_kb_color(i));
-        XParseColor(dpy, attr.colormap, a_xf_colors[i].hcolor, &a_xf_colors[i].scolor);
-        XAllocColor(dpy, attr.colormap, &a_xf_colors[i].scolor);
-    }
+    c_init_xf_colors(dpy, &attr);
 
     wt = XCreateWindow(dpy, DefaultRootWindow(dpy), 0, 0,
                       pwidth, BORDER_WIDTH, BORDER_WIDTH, vinfo.depth,
@@ -96,8 +62,8 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
 
         if (c_kb_index != c_prev_kb_index) {
 
-            XSetForeground(dpy, gct, a_xf_colors[c_kb_index].scolor.pixel);
-            XSetForeground(dpy, gcb, a_xf_colors[c_kb_index].scolor.pixel);
+            XSetForeground(dpy, gct, /*a_xf_colors[c_kb_index].scolor.pixel*/c_get_xcolor_pixel(c_kb_index));
+            XSetForeground(dpy, gcb, /*a_xf_colors[c_kb_index].scolor.pixel*/c_get_xcolor_pixel(c_kb_index));
 
             XDrawRectangle(dpy, wt, gct, 0, 0, pwidth, BORDER_WIDTH);
             XDrawRectangle(dpy, wb, gcb, BORDER_WIDTH, 0, pwidth, BORDER_WIDTH);

@@ -66,6 +66,19 @@ void c_init_conf() {
 	strcpy(kb_state_colors[1], "#007BFF");
 }
 
+void c_init_xf_colors(Display *dpy, XSetWindowAttributes *attr) {
+	int i;
+    for (i = 0; i < NUM_COLORS; i++) {
+        strcpy(a_xf_colors[i].hcolor, c_get_kb_color(i));
+        XParseColor(dpy, attr->colormap, a_xf_colors[i].hcolor, &a_xf_colors[i].scolor);
+        XAllocColor(dpy, attr->colormap, &a_xf_colors[i].scolor);
+    }	
+}
+
+unsigned long c_get_xcolor_pixel(int index) {
+	return a_xf_colors[index].scolor.pixel;
+}
+
 int c_is_file_exists(char *filename) {
 	if (access(filename, F_OK) == 0) {
 		// file exists
