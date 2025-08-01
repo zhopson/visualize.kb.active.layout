@@ -15,7 +15,7 @@
 #define BORDER_WIDTH 5
 #define DELAY_CHECK 3
 
-const char LOCKFILE[] = "/tmp/vlang_test.lock";
+const char LOCKFILE[] = "/tmp/vlang.lock";
 char C_FILENAME[] = "app.conf";
 
 // Define a signal handler function
