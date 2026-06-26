@@ -1,0 +1,64 @@
+[Unit]
+Description=On screen visualizing of active keyboard layout
+After=graphical.target
+Requires=graphical.target
+
+[Service]
+# Даем знать systemd, что этот сервис представляет из себя лишь 1 процесс.
+Type=simple
+# Выполнить эту команду при запуске сервиса.
+ExecStart=[app_dir]/visual-kblang
+# Выполнить эту команду при остановке сервиса.
+#ExecStop=/bin/kill -TERM $MAINPID
+Restart=always
+RestartSec=5
+WorkingDirectory=[app_dir]
+User=[user]
+#PIDFile=/run/vkblayout.pid
+
+# Переменные окружения для X11
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=[home_dir]/.Xauthority
+Environment=QT_QPA_PLATFORM=xcb
+Environment=XDG_RUNTIME_DIR=/run/user/[uid]  # Замените 1000 на UID пользователя
+
+[Install]
+# Cлужба будет связана с целью multi-user.target, предназначенной для обычного многопользовательского режима работы операционной системы.
+WantedBy=multi-user.target
+
+
+################################################################################################################
+# Установка в systemd
+
+# Проверьте, какой DISPLAY используется
+# От имени пользователя, который запускает программу
+#echo $DISPLAY
+# Обычно :0 или :1
+
+# Проверьте, что X сервер работает
+#ps aux | grep X
+
+# Проверьте права на .Xauthority
+# Проверьте владельца
+#ls -la [home]/.Xauthority
+
+# Если файла нет, создайте его
+#touch [home]/.Xauthority
+#chown [user]:user [home]/.Xauthority
+
+
+###################################
+# 1. Обновите конфиг
+#sudo systemctl daemon-reload
+
+# 2. Запустите сервис
+#sudo systemctl start vkblayout.service
+
+# 3. Проверьте статус
+#sudo systemctl status vkblayout.service
+
+# 4. Посмотрите логи
+#sudo journalctl -u vkblayout.service -f
+
+# 5. Если работает - включите автозапуск
+#sudo systemctl enable vkblayout.service

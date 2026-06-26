@@ -20,6 +20,7 @@ char C_FILENAME[] = "app.conf";
 
 // Define a signal handler function
 void sig_handler(int signum) {
+//using printf is unsafely
     printf("\nGetting signal number %d\n", signum);
     printf("Stopping application.\n");
     unlink(LOCKFILE); // Remove filelock before shutdown  
@@ -30,8 +31,8 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
     XSetWindowAttributes attr = {0};
     XGCValues gcv = {0};
     XVisualInfo vinfo;
-    GC gct, gcb;
-    Window wt, wb;
+    GC gct, gcl, gcr, gcb;
+    Window wt, wl, wr, wb;
 
     XMatchVisualInfo(dpy, DefaultScreen(dpy), 32, TrueColor, &vinfo);
     attr.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), vinfo.visual, AllocNone);
@@ -42,15 +43,25 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
     wt = XCreateWindow(dpy, DefaultRootWindow(dpy), 0, 0,
                       pwidth, BORDER_WIDTH, BORDER_WIDTH, vinfo.depth,
                       CopyFromParent, vinfo.visual, CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect, &attr);
+    wl = XCreateWindow(dpy, DefaultRootWindow(dpy), 0, 0,
+                      BORDER_WIDTH, py+pheight, BORDER_WIDTH, vinfo.depth,
+                      CopyFromParent, vinfo.visual, CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect, &attr);
+    wr = XCreateWindow(dpy, DefaultRootWindow(dpy), px+pwidth-BORDER_WIDTH, 0,
+                      BORDER_WIDTH, py+pheight, BORDER_WIDTH, vinfo.depth,
+                      CopyFromParent, vinfo.visual, CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect, &attr);
     wb = XCreateWindow(dpy, DefaultRootWindow(dpy), px, py+pheight,
                       pwidth, BORDER_WIDTH, BORDER_WIDTH, vinfo.depth,
                       CopyFromParent, vinfo.visual, CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect, &attr);
 
     gcv.line_width = BORDER_WIDTH;
     gct = XCreateGC(dpy, wt, GCLineWidth, &gcv);
+    gcl = XCreateGC(dpy, wt, GCLineWidth, &gcv);
+    gcr = XCreateGC(dpy, wt, GCLineWidth, &gcv);
     gcb = XCreateGC(dpy, wb, GCLineWidth, &gcv);
 
     XMapWindow(dpy, wt);
+    XMapWindow(dpy, wl);
+    XMapWindow(dpy, wr);
     XMapWindow(dpy, wb);
     XSync(dpy, False);
 
@@ -63,10 +74,14 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
         if (c_kb_index != c_prev_kb_index) {
 
             XSetForeground(dpy, gct, /*a_xf_colors[c_kb_index].scolor.pixel*/c_get_xcolor_pixel(c_kb_index));
+            XSetForeground(dpy, gcl, /*a_xf_colors[c_kb_index].scolor.pixel*/c_get_xcolor_pixel(c_kb_index));
+            XSetForeground(dpy, gcr, /*a_xf_colors[c_kb_index].scolor.pixel*/c_get_xcolor_pixel(c_kb_index));
             XSetForeground(dpy, gcb, /*a_xf_colors[c_kb_index].scolor.pixel*/c_get_xcolor_pixel(c_kb_index));
 
             XDrawRectangle(dpy, wt, gct, 0, 0, pwidth, BORDER_WIDTH);
-            XDrawRectangle(dpy, wb, gcb, BORDER_WIDTH, 0, pwidth, BORDER_WIDTH);
+            XDrawRectangle(dpy, wl, gcl, 0, 0, BORDER_WIDTH, pheight);
+            XDrawRectangle(dpy, wr, gcr, 0, 0, BORDER_WIDTH, pheight);
+            XDrawRectangle(dpy, wb, gcb, 0, 0, pwidth, BORDER_WIDTH);
 
             XSync(dpy, False);
 
@@ -82,8 +97,12 @@ void DrawLineTopBottomDesktop(Display *dpy, int px, int py, int pwidth, int phei
     // Refresh window content
     XFlush(dpy);
     XFreeGC(dpy, gct);
+    XFreeGC(dpy, gcl);
+    XFreeGC(dpy, gcr);
     XFreeGC(dpy, gcb);
     XDestroyWindow(dpy, wt);
+    XDestroyWindow(dpy, wl);
+    XDestroyWindow(dpy, wr);
     XDestroyWindow(dpy, wb);
 }
 
@@ -142,13 +161,15 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////        
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Register handlers for signals SIGTERM and SIGINT
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
-/////////////////////////////////////////////////////////////////////////////////////////////////////////        
+    signal(SIGHUP, sig_handler);
+    signal(SIGKILL, sig_handler);
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
     Display *display = XOpenDisplay(NULL);
-/////////////////////////////////////////////////////////////////////////////////////////////////////////        
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
     char layout_names[500]="\0";
     char buf[1000]="\0";
     char header[] = "System KB Layouts list:\n";
